@@ -87,7 +87,7 @@ class HuffmanTree():
 
 		return codes
 
-	def print_codes(self):
+	def build_codes_dict(self):
 		return self.generate_codes(self.root, "", {})
 
 	def _preorder_traversal(self, node, depth=0):
