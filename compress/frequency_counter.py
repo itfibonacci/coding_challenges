@@ -25,6 +25,3 @@ def time_it(filename):
 
 def sort_dictionary(dictionary):
 	return dict(sorted(dictionary.items(), key=lambda item: item[1]))
-
-print(sort_dictionary(frequency_counter("./135-0.txt")))
-#bad_frequency_counter("./135-0.txt")
