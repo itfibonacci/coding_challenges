@@ -20,14 +20,16 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 	def do_GET(self):
 		if re.match(r'/.*/limited', self.path):
 			user = self.path.split('/')[1]
-			self.send_response(200)
-			self.end_headers()
 			if user in Bucket.user_bucket:
 				bucket = Bucket.get_users_bucket(user)
 				if bucket.rate_exceeded():
-					response = user.encode() + b': you have exceeded your limit !'
+					self.send_response(400)
+					self.end_headers()
+					response = b'\n' + user.encode() + b': you have exceeded your limit !'
 				else:
-					response = b'Limited! Welcome back ' + user.encode() + b'!'
+					self.send_response(200)
+					self.end_headers()
+					response = b'\nLimited! Welcome back ' + user.encode() + b'!'
 				self.wfile.write(response)
 				self.wfile.write(b'\nYour capacity is: ')
 				self.wfile.write(str(bucket.capacity).encode())
@@ -35,6 +37,8 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 				self.wfile.write(str(bucket.tokens).encode())
 				self.wfile.write(b' tokens left')
 			else:
+				self.send_response(200)
+				self.end_headers()
 				response = b'Limited! Let\'s Go ' + user.encode() + b'!'
 				self.wfile.write(response)
 				user_bucket = Bucket(user, 10)

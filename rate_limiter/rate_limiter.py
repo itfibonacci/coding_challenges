@@ -37,9 +37,9 @@ class Bucket():
 
     def add_tokens(self):
         while True:
-            if self.tokens < self.capacity:
+            if self.tokens <= self.capacity:
                 self.tokens += 1
-            time.sleep(10)
+            time.sleep(1)
 
     @classmethod
     def get_users_bucket(cls, user):
