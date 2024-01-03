@@ -29,7 +29,6 @@ class Bucket():
 
     def rate_exceeded(self):
         if self.tokens <= 0:
-            self.tokens -= 1
             return True
         else:
             self.tokens -= 1
