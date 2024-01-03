@@ -12,21 +12,40 @@ Limited, don't over use me!
 """
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import threading
+import re
+
+from rate_limiter import Bucket
 
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        if self.path == '/unlimited':
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(b'Unlimited! Let\'s Go!')
-        elif self.path == '/limited':
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(b'Limited, don\'t over use me!')
-        else:
-            self.send_response(404)
-            self.end_headers()
-            self.wfile.write(b'Page not found')
+	def do_GET(self):
+		if re.match(r'/.*/limited', self.path):
+			user = self.path.split('/')[1]
+			self.send_response(200)
+			self.end_headers()
+			if user in Bucket.user_bucket:
+				bucket = Bucket.get_users_bucket(user)
+				if bucket.rate_exceeded():
+					response = user.encode() + b': you have exceeded your limit !'
+				else:
+					response = b'Limited! Welcome back ' + user.encode() + b'!'
+				self.wfile.write(response)
+				self.wfile.write(b'\nYour capacity is: ')
+				self.wfile.write(str(bucket.capacity).encode())
+				self.wfile.write(b'\nYou have: ')
+				self.wfile.write(str(bucket.tokens).encode())
+				self.wfile.write(b' tokens left')
+			else:
+				response = b'Limited! Let\'s Go ' + user.encode() + b'!'
+				self.wfile.write(response)
+				user_bucket = Bucket(user, 10)
+		elif self.path == '/unlimited':
+			self.send_response(200)
+			self.end_headers()
+			self.wfile.write(b'Unlimited! Let\'s go')
+		else:
+			self.send_response(404)
+			self.end_headers()
+			self.wfile.write(b'Page not found')
 
 def run(server_class=HTTPServer, handler_class=SimpleHTTPRequestHandler):
     server_address = ('', 8000)

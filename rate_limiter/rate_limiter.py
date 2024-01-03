@@ -17,15 +17,19 @@ import time
 import threading
 
 class Bucket():
+    user_bucket = {}
+
     def __init__(self, user, capacity) -> None:
         self.user = user
         self.capacity = capacity
         self.tokens = 0
         self.add_tokens_thread = threading.Thread(target=self.add_tokens)
         self.add_tokens_thread.start()
-    
+        Bucket.user_bucket[user] = self
+
     def rate_exceeded(self):
-        if self.tokens == 0:
+        if self.tokens <= 0:
+            self.tokens -= 1
             return True
         else:
             self.tokens -= 1
@@ -35,4 +39,8 @@ class Bucket():
         while True:
             if self.tokens < self.capacity:
                 self.tokens += 1
-            time.sleep(1)
+            time.sleep(10)
+
+    @classmethod
+    def get_users_bucket(cls, user):
+        return Bucket.user_bucket[user]
