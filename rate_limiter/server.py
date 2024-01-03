@@ -14,7 +14,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import threading
 import re
 
-from rate_limiter import Bucket
+from rate_limiter_token_bucket import Bucket
 
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 	def do_GET(self):
@@ -23,7 +23,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 			if user in Bucket.user_bucket:
 				bucket = Bucket.get_users_bucket(user)
 				if bucket.rate_exceeded():
-					self.send_response(400)
+					self.send_response(429)
 					self.end_headers()
 					response = b'\n' + user.encode() + b': you have exceeded your limit !'
 				else:
@@ -51,7 +51,42 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 			self.end_headers()
 			self.wfile.write(b'Page not found')
 
-def run(server_class=HTTPServer, handler_class=SimpleHTTPRequestHandler):
+class IPSimpleHTTPRequestHandler(BaseHTTPRequestHandler):
+	def do_GET(self):
+		if self.path == '/limited':
+			ip_address = self.client_address[0]
+			if ip_address in Bucket.user_bucket:
+				bucket = Bucket.get_users_bucket(ip_address)
+				if bucket.rate_exceeded():
+					self.send_response(429)
+					self.end_headers()
+					response = b'\n' + ip_address.encode() + b': you have exceeded your limit !'
+				else:
+					self.send_response(200)
+					self.end_headers()
+					response = b'\nLimited! Welcome back ' + ip_address.encode() + b'!'
+				self.wfile.write(response)
+				self.wfile.write(b'\nYour capacity is: ')
+				self.wfile.write(str(bucket.capacity).encode())
+				self.wfile.write(b'\nYou have: ')
+				self.wfile.write(str(bucket.tokens).encode())
+				self.wfile.write(b' tokens left')
+			else:
+				self.send_response(200)
+				self.end_headers()
+				response = b'Limited! Let\'s Go ' + ip_address.encode() + b'!'
+				self.wfile.write(response)
+				user_bucket = Bucket(ip_address, 10)
+		elif self.path == '/unlimited':
+			self.send_response(200)
+			self.end_headers()
+			self.wfile.write(b'Unlimited! Let\'s go')
+		else:
+			self.send_response(404)
+			self.end_headers()
+			self.wfile.write(b'Page not found')
+
+def run(server_class=HTTPServer, handler_class=IPSimpleHTTPRequestHandler):
     server_address = ('', 8000)
     httpd = server_class(server_address, handler_class)
     httpd.serve_forever()
