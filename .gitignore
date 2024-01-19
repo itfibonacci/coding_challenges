@@ -1,4 +1,8 @@
 __pycache__
-
 */.txt
 *.txt
+*.dSYM/
+./*.dSYM/
+*.dSYM/
+./cron.dSYM/
+*.dSYM

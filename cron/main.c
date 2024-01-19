@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <regex.h>
 // pass a text file which will be read line by line
 // pass a line to the tokenizer function until there is no lines left.
 // we will read a line, then print it and next to it give the cron "explanation"
@@ -12,42 +13,64 @@
 // add proper clean up and closing of files
 #define LINE_LIMIT 16384
 
+void main_loop ();
+FILE *open_file (char *filename);
+char *read_line(FILE* fp);
 char **tokenize (char *line);
 void print_tokens(char **tokens);
 void print_description(char **tokens);
 int process_minutes(char *minutes);
 int is_star(char *interval);
-void cleanup(FILE *fp, char *line, char **tokens);
+char *regexify(char *interval);
+void cleanup(FILE *fp);
 
 int main() {
-	int line_max = LINE_LIMIT;
-	char *filename = "cron.txt";
-	char **tokens;
+	main_loop();
+	return 0;
+}
 
+void main_loop () {
+	char *status;
+	char *line;
+	char **tokens;
+	FILE *fp = open_file("cron.txt");
+
+	while ((line = read_line(fp)) != NULL) {
+		tokens = tokenize(line);
+		print_description(tokens);
+		print_tokens(tokens);
+		free(line);
+		free(tokens);
+	}
+	cleanup(fp);
+}
+
+FILE *open_file (char *filename) {
 	FILE *fp = fopen(filename, "r");
 	if (!fp) {
 		fprintf(stderr, "Could not open the file \"%s\"\n", filename);
 		exit(EXIT_FAILURE);
 	}
+	return fp;
+}
+
+char *read_line(FILE* fp) {
+	int line_max = LINE_LIMIT;
+	char **tokens;
 
 	char *line = malloc(line_max + 1);
 	if (line == NULL) {
 		fprintf(stderr, "Allocation failed miserably.\n");
-		return 1;
+		return NULL;
 	}
 
 	while (fgets(line, line_max + 1, fp) != NULL) {
 		// if the line contains emptyness then drop it;
 		if (line[0] != '\n' && line[1] != '\0') {
-			// Process line, send it to a tokenizer
-			tokens = tokenize(line);
-			print_description(tokens);
-			print_tokens(tokens);
+			return line;
 		}
 	}
-
-	cleanup(fp, line, tokens);
-	return 0;
+	return NULL;
 }
 
 #define TOKEN_ARRAY_SIZE 5
@@ -94,7 +117,7 @@ void print_description(char **tokens) {
 	//                          # │ │ │ │ │
 	//                          # │ │ │ │ │
 	//                          # * * * * * <command>
-	print_minutes(tokens[0]);
+	process_minutes(tokens[0]);
 }
 
 int process_minutes(char *minutes) {
@@ -102,9 +125,50 @@ int process_minutes(char *minutes) {
 		printf("minute ");
 		return 0;
 	}
-	int 
-	next_field = strtok(minutes, "-");
+	regexify(minutes);
+	return 0;
+}
 
+char *regexify(char *interval) {
+	regex_t regex;
+	int reti;
+	char msgbuf[100];
+
+	size_t max_groups = 3;
+	regmatch_t groups[max_groups];
+
+	// Compile regular expression
+	reti = regcomp(&regex, "^\\d{1,2}(-\\d{1,2})?$", REG_EXTENDED);
+	if (reti) {
+		fprintf(stderr, "Could not compile the regular expression.\n");
+		exit(1);
+	}
+
+	// Execute regular expression
+	reti = regexec(&regex, interval, max_groups, groups, 0);
+	if (!reti) {
+		puts("Match!");
+		for (unsigned int g = 0; g < max_groups; g++) {
+			if (groups[g].rm_so == (size_t) - 1)
+				break;
+			
+			char interval_copy[strlen(interval) + 1];
+			strcpy(interval_copy, interval);
+			interval_copy[groups[g].rm_eo] = 0;
+			printf("Group %u: [%2llu-%2llu]: %s\n", g, groups[g].rm_so, groups[g].rm_eo, interval_copy + groups[g].rm_so);
+		}
+	}
+	else if (reti == REG_NOMATCH) {
+		return("No Match");
+	}
+	else {
+		regerror(reti, &regex, msgbuf, sizeof(msgbuf));
+		fprintf(stderr, "Regex match failed: %s,\n", msgbuf);
+		exit(1);
+	}
+	// Free memory allocated to the pattern buffer by regcomp()
+	regfree(&regex);
+	return 0;
 }
 
 int is_star(char *interval) {
@@ -117,10 +181,8 @@ int is_star(char *interval) {
 	}
 }
 
-void cleanup(FILE *fp, char *line, char **tokens) {
+void cleanup(FILE *fp) {
 	if (fclose(fp) == 0) {
 		fprintf(stdout, "Cleanup: the opened cron file has been properly closed\n");
 	}
-	free(line);
-	free(tokens);
 }
