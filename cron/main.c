@@ -19,9 +19,10 @@ char *read_line(FILE* fp);
 char **tokenize (char *line);
 void print_tokens(char **tokens);
 void print_description(char **tokens);
+int validate_minutes(char *interval);
 int process_minutes(char *minutes);
+int process_interval(char *interval, int offset);
 int is_star(char *interval);
-char *regexify(char *interval);
 void cleanup(FILE *fp);
 
 int main() {
@@ -36,9 +37,10 @@ void main_loop () {
 	FILE *fp = open_file("cron.txt");
 
 	while ((line = read_line(fp)) != NULL) {
+		printf("%s", line);
 		tokens = tokenize(line);
+		//print_tokens(tokens);
 		print_description(tokens);
-		print_tokens(tokens);
 		free(line);
 		free(tokens);
 	}
@@ -66,7 +68,8 @@ char *read_line(FILE* fp) {
 
 	while (fgets(line, line_max + 1, fp) != NULL) {
 		// if the line contains emptyness then drop it;
-		if (line[0] != '\n' && line[1] != '\0') {
+		
+		if (line[0] != '\n' && line[1] != '\0' && line[0] != '#') {
 			return line;
 		}
 	}
@@ -87,6 +90,8 @@ char **tokenize (char *line) {
 		exit(EXIT_FAILURE);
 	}
 	token = strtok(line, SEPARATOR);
+	tokens[token_count] = token;
+	token_count++;
 
 	while ((token = strtok(NULL, SEPARATOR))) {
 		tokens[token_count] = token;
@@ -107,59 +112,41 @@ int validate_cron_line(char **tokens) {
 	return 0;
 }
 
+int (*validate_intervals[5])(char*) = { validate_minutes };
+
 void print_description(char **tokens) {
-	// tokens[0] - minute       # ┌───────────── minute (0–59)
-	// tokens[1] - hour         # │ ┌───────────── hour (0–23)
-	// tokens[2] - dayofmonth   # │ │ ┌───────────── day of the month (1–31)
-	// tokens[3] - month        # │ │ │ ┌───────────── month (1–12)
-	// tokens[3] - dayofweek    # │ │ │ │ ┌───────────── day of the week (0–6) (Sunday to Saturday;
-	//                          # │ │ │ │ │                                   7 is Sunday on some systems)
-	//                          # │ │ │ │ │
-	//                          # │ │ │ │ │
-	//                          # * * * * * <command>
-	process_minutes(tokens[0]);
-}
-
-int process_minutes(char *minutes) {
-	if (is_star(minutes) == 0) {
-		printf("minute ");
-		return 0;
+	validate_intervals[0](tokens[0]);
+	for (int i = 0; i < 5; i++) {
+		process_interval(tokens[i], i);
+		if (i != 4) {
+			printf(", ");
+		}
 	}
-	regexify(minutes);
-	return 0;
+	printf("\n");
+	printf("\n");
 }
 
-char *regexify(char *interval) {
+char *interval_names[] = {"minute(s)", "hour(s)", "day of the month", "month", "day of the week"};
+
+int validate_minutes(char *interval) {
 	regex_t regex;
 	int reti;
 	char msgbuf[100];
 
-	size_t max_groups = 3;
-	regmatch_t groups[max_groups];
-
 	// Compile regular expression
-	reti = regcomp(&regex, "^\\d{1,2}(-\\d{1,2})?$", REG_EXTENDED);
+	reti = regcomp(&regex, "^(\\*|[0-5]?0-9?(,[0-5]?0-9?)*)$", REG_EXTENDED);
 	if (reti) {
 		fprintf(stderr, "Could not compile the regular expression.\n");
 		exit(1);
 	}
 
 	// Execute regular expression
-	reti = regexec(&regex, interval, max_groups, groups, 0);
+	reti = regexec(&regex, interval, 0, NULL, 0);
 	if (!reti) {
-		puts("Match!");
-		for (unsigned int g = 0; g < max_groups; g++) {
-			if (groups[g].rm_so == (size_t) - 1)
-				break;
-			
-			char interval_copy[strlen(interval) + 1];
-			strcpy(interval_copy, interval);
-			interval_copy[groups[g].rm_eo] = 0;
-			printf("Group %u: [%2llu-%2llu]: %s\n", g, groups[g].rm_so, groups[g].rm_eo, interval_copy + groups[g].rm_so);
-		}
+		return 0;
 	}
 	else if (reti == REG_NOMATCH) {
-		return("No Match");
+		return(1);
 	}
 	else {
 		regerror(reti, &regex, msgbuf, sizeof(msgbuf));
@@ -171,8 +158,19 @@ char *regexify(char *interval) {
 	return 0;
 }
 
+int process_interval(char *interval, int offset) {
+	if (is_star(interval) == 0) {
+		printf("%s", interval_names[offset]);
+	}
+	else {
+		printf("at %s %s", interval_names[offset], interval);
+	}
+	//validate_minutes(minutes);
+	return 0;
+}
+
 int is_star(char *interval) {
-	if (strlen(interval) == 1 && interval[0] == '*') {
+	if (strcmp(interval, "*") == 0) {
 		printf("Every ");
 		return 0;
 	}
