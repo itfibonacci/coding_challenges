@@ -3,6 +3,7 @@ CC = clang
 
 # Define any compile-time flags
 CFLAGS = -Wall -g
+LDFLAGS = -lpcre
 
 # Define the dir for object files and executables
 OBJDIR = bin
@@ -20,7 +21,7 @@ all: $(MAIN)
 
 $(MAIN): $(OBJS)
 	mkdir -p $(OBJDIR)
-	$(CC) $(CFLAGS) -o $(MAIN) $(SRCS)
+	$(CC) $(CFLAGS) -o $(MAIN) $(OBJS) $(LDFLAGS)
 
 $(OBJDIR)/%.o: %.c
 	mkdir -p $(OBJDIR)
