@@ -1,17 +1,14 @@
+// im getting an error from regcomp because of no memory
+// probably have some memory leak somewhere
 #include <stdio.h>
+#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 #include <regex.h>
-// pass a text file which will be read line by line
-// pass a line to the tokenizer function until there is no lines left.
-// we will read a line, then print it and next to it give the cron "explanation"
-// each line will be tokenized based on spaces
-// can have a function like translate to natural language, that will accept either several
-// parameters or an array of values. each value will be mins, hours, day of month, etc... 
-// validation function
-// remember to ignore comments
-// add proper clean up and closing of files
+
 #define LINE_LIMIT 16384
+// eventually pass this as an argv
+#define CRON_FILENAME "text.txt"
 
 void main_loop ();
 FILE *open_file (char *filename);
@@ -19,8 +16,8 @@ char *read_line(FILE* fp);
 char **tokenize (char *line);
 void print_tokens(char **tokens);
 void print_description(char **tokens);
+int validate_cron_line(char **tokens);
 int validate_minutes(char *interval);
-int process_minutes(char *minutes);
 int process_interval(char *interval, int offset);
 int is_star(char *interval);
 void cleanup(FILE *fp);
@@ -31,15 +28,15 @@ int main() {
 }
 
 void main_loop () {
-	char *status;
+	//char *status;
 	char *line;
 	char **tokens;
-	FILE *fp = open_file("cron.txt");
+	FILE *fp = open_file(CRON_FILENAME);
 
 	while ((line = read_line(fp)) != NULL) {
 		printf("%s", line);
 		tokens = tokenize(line);
-		//print_tokens(tokens);
+		validate_cron_line(tokens);
 		print_description(tokens);
 		free(line);
 		free(tokens);
@@ -58,7 +55,6 @@ FILE *open_file (char *filename) {
 
 char *read_line(FILE* fp) {
 	int line_max = LINE_LIMIT;
-	char **tokens;
 
 	char *line = malloc(line_max + 1);
 	if (line == NULL) {
@@ -107,36 +103,30 @@ void print_tokens(char **tokens) {
 	}
 }
 
+int (*validation_funcs[]) (char *) = {
+	&validate_minutes
+};
+char *interval_names[] = { "minute(s)", "hour(s)", "day of the month", "month", "day of the week" };
+
 int validate_cron_line(char **tokens) {
 	// simple one is if there are less than 5 tokens then for sure it's not good
+	validation_funcs[0](tokens[0]);
+	// add a for loop
 	return 0;
 }
-
-int (*validate_intervals[5])(char*) = { validate_minutes };
-
-void print_description(char **tokens) {
-	validate_intervals[0](tokens[0]);
-	for (int i = 0; i < 5; i++) {
-		process_interval(tokens[i], i);
-		if (i != 4) {
-			printf(", ");
-		}
-	}
-	printf("\n");
-	printf("\n");
-}
-
-char *interval_names[] = {"minute(s)", "hour(s)", "day of the month", "month", "day of the week"};
 
 int validate_minutes(char *interval) {
 	regex_t regex;
 	int reti;
 	char msgbuf[100];
+	const char *pattern = "^[0-5]?[0-9]$";
 
 	// Compile regular expression
-	reti = regcomp(&regex, "^(\\*|[0-5]?0-9?(,[0-5]?0-9?)*)$", REG_EXTENDED);
-	if (reti) {
+	reti = regcomp(&regex, pattern, REG_EXTENDED);
+	if (reti != 0) {
+		printf("Error code: %d\n", reti);
 		fprintf(stderr, "Could not compile the regular expression.\n");
+		regfree(&regex);
 		exit(1);
 	}
 
@@ -151,11 +141,21 @@ int validate_minutes(char *interval) {
 	else {
 		regerror(reti, &regex, msgbuf, sizeof(msgbuf));
 		fprintf(stderr, "Regex match failed: %s,\n", msgbuf);
+		regfree(&regex);
 		exit(1);
 	}
-	// Free memory allocated to the pattern buffer by regcomp()
-	regfree(&regex);
 	return 0;
+}
+
+void print_description(char **tokens) {
+	for (int i = 0; i < 5; i++) {
+		process_interval(tokens[i], i);
+		if (i != 4) {
+			printf(", ");
+		}
+	}
+	printf("\n");
+	printf("\n");
 }
 
 int process_interval(char *interval, int offset) {
@@ -165,7 +165,6 @@ int process_interval(char *interval, int offset) {
 	else {
 		printf("at %s %s", interval_names[offset], interval);
 	}
-	//validate_minutes(minutes);
 	return 0;
 }
 
